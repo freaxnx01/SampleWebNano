@@ -1,0 +1,1 @@
+docker run --rm -d --name hello-nano -p 8099:80 hello-nano
