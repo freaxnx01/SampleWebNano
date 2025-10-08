@@ -1,0 +1,47 @@
+name: build-and-push-windows-image
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    # Windows runner required for Windows container builds
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # (Optional) Show Docker info; must be OSType=windows
+      - name: Docker info
+        run: docker info
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Compute tags
+        id: meta
+        shell: bash
+        run: |
+          OWNER_LC=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          REPO_LC=$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${OWNER_LC}/${REPO_LC}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=${IMAGE}:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "tag_latest=${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+
+      # Simple docker build/push (works well on Windows runners)
+      - name: Build image (Windows)
+        run: |
+          docker build --isolation=hyperv -t "${{ steps.meta.outputs.tag_latest }}" -t "${{ steps.meta.outputs.tag_sha }}" .
+
+      - name: Push image
+        run: |
+          docker push "${{ steps.meta.outputs.tag_latest }}"
+          docker push "${{ steps.meta.outputs.tag_sha }}"
